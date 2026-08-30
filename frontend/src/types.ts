@@ -345,6 +345,90 @@ export interface LinkUpsertRequest {
   enabled: boolean
 }
 
+/** A track inside a local playlist. `links` carries known catalog ids per
+ * connected service — filled in lazily as tracks get resolved/pushed so a
+ * later push never has to re-search for the same track. */
+export interface LocalPlaylistTrack {
+  id: string
+  name: string
+  artist: string
+  album: string
+  isrc: string
+  duration_ms: number | null
+  image: string
+  added_at: string
+  links: Record<string, { id: string; occurrence_id: string }>
+}
+
+export interface LocalPlaylistOrigin {
+  provider: string
+  playlist_id: string
+  /** True when this playlist came from an imported backup file rather than a
+   * live clone — an imported playlist is never auto-bound to a resync target. */
+  imported: boolean
+}
+
+/** GET/POST /api/local-playlists — a playlist that lives in SongMirror itself,
+ * independent of any one connected service. `links` maps a provider id to the
+ * live playlist it resyncs to. */
+export interface LocalPlaylist {
+  id: string
+  name: string
+  description: string
+  image: string
+  tracks: LocalPlaylistTrack[]
+  links: Record<string, string>
+  origin: LocalPlaylistOrigin | null
+  created_at: string
+  updated_at: string
+}
+
+export interface LocalPlaylistDiffTrack {
+  id: string
+  name: string
+  artist: string
+  album: string
+  duration_ms: number | null
+  added_at: string
+}
+
+/** GET /api/local-playlists/{id}/compare/{provider} — read-only diff between
+ * the local playlist and its bound live playlist on that service. */
+export interface LocalPlaylistCompareResult {
+  /** Local-only tracks a push would add to the provider. */
+  to_push_add: LocalPlaylistDiffTrack[]
+  /** Provider-only tracks — a push-with-removals would drop these, or pull()
+   * can merge selected ones into the local playlist instead. */
+  provider_only: LocalPlaylistDiffTrack[]
+}
+
+/** POST /api/local-playlists/import/inspect response — a stateless preview of
+ * a backup file's playlists, for the import picker. */
+export interface LocalPlaylistBackupPreview {
+  provider: { id: string; name: string }
+  playlists: Array<{ id: string; name: string; track_count: number }>
+}
+
+export type LocalPlaylistPushStatus = 'queued' | 'running' | 'done' | 'error'
+
+/** GET /api/local-playlists/push-jobs/{id} */
+export interface LocalPlaylistPushJob {
+  id: string
+  status: LocalPlaylistPushStatus
+  playlist_id: string
+  playlist_name: string
+  provider: string
+  execute: boolean
+  added: number
+  removed: number
+  missing: number
+  held: number
+  total: number
+  processed: number
+  not_found: Array<{ name: string; artist: string }>
+  error: string | null
+}
+
 export type TransferStatus = 'queued' | 'running' | 'done' | 'error' | 'busy' | 'paused' | 'stopped'
 
 export interface TransferEndpoint {
