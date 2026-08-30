@@ -12,12 +12,12 @@ interface Props {
   onSaved: () => void
 }
 
-/** Imports one or more playlists from a SongMirror backup file — either of
- * SongMirror's own lossless export formats, JSON or XML (see the Playlists
- * page's Export menu). The Soundiiz export isn't accepted: it carries no
- * `kind`/`schema_version` envelope and drops fields a lossless round-trip
- * needs. Never binds a live resync target on import, since the backup's
- * playlist id may belong to a different account than what's connected here. */
+/** Imports one or more playlists from a SongMirror backup file, JSON or XML
+ * (see the Playlists page's Export menu). Only SongMirror's own lossless
+ * formats are accepted — reading one back is how a playlist moves between
+ * accounts or SongMirror instances. Never binds a live resync target on
+ * import, since the backup's playlist id may belong to a different account
+ * than what's connected here. */
 export function ImportBackupModal({ open, onClose, onSaved }: Props) {
   const [content, setContent] = useState<string | null>(null)
   const [preview, setPreview] = useState<LocalPlaylistBackupPreview | null>(null)

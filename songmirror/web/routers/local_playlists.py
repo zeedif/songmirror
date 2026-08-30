@@ -40,8 +40,6 @@ def clone_local_playlist(request: Request, body: dict = Body(...)):
 
 @router.post("/api/local-playlists/import/inspect")
 def inspect_local_playlist_backup(request: Request, body: dict = Body(...)):
-    """`content` is the raw backup file text (JSON or XML) — parsing happens
-    server-side so the browser never has to guess the format."""
     return _handled(_service(request).inspect_backup, body["content"])
 
 
