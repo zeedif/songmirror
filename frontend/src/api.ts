@@ -233,10 +233,12 @@ export const api = {
   deleteLocalPlaylist: (id: string) => request<OkResponse>(`/api/local-playlists/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   cloneLocalPlaylist: (provider: string, playlistId: string) =>
     request<LocalPlaylist>('/api/local-playlists/clone', json({ provider, playlist_id: playlistId })),
-  inspectLocalPlaylistBackup: (backup: unknown) =>
-    request<LocalPlaylistBackupPreview>('/api/local-playlists/import/inspect', json(backup)),
-  importLocalPlaylistBackup: (backup: unknown, selectIds?: string[]) =>
-    request<LocalPlaylist[]>('/api/local-playlists/import', json({ backup, select_ids: selectIds })),
+  /** `content` is the raw backup file text — JSON or XML, either of
+   * SongMirror's own lossless export formats. Parsed server-side. */
+  inspectLocalPlaylistBackup: (content: string) =>
+    request<LocalPlaylistBackupPreview>('/api/local-playlists/import/inspect', json({ content })),
+  importLocalPlaylistBackup: (content: string, selectIds?: string[]) =>
+    request<LocalPlaylist[]>('/api/local-playlists/import', json({ content, select_ids: selectIds })),
   addLocalPlaylistTrack: (
     id: string,
     values: { name: string; artist?: string; album?: string; isrc?: string; duration_ms?: number | null },

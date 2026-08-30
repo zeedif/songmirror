@@ -360,14 +360,6 @@ export interface LocalPlaylistTrack {
   links: Record<string, { id: string; occurrence_id: string }>
 }
 
-export interface LocalPlaylistOrigin {
-  provider: string
-  playlist_id: string
-  /** True when this playlist came from an imported backup file rather than a
-   * live clone — an imported playlist is never auto-bound to a resync target. */
-  imported: boolean
-}
-
 /** GET/POST /api/local-playlists — a playlist that lives in SongMirror itself,
  * independent of any one connected service. `links` maps a provider id to the
  * live playlist it resyncs to. */
@@ -378,7 +370,6 @@ export interface LocalPlaylist {
   image: string
   tracks: LocalPlaylistTrack[]
   links: Record<string, string>
-  origin: LocalPlaylistOrigin | null
   created_at: string
   updated_at: string
 }

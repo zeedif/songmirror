@@ -3,6 +3,7 @@ diff flow against a fake MirrorTarget (mirrors tests/test_transfers.py's
 approach of faking the provider boundary rather than hitting a real API)."""
 
 import asyncio
+import json
 
 import pytest
 
@@ -11,7 +12,7 @@ from songmirror.services.local_playlists import (
     LocalLibraryError, LocalLibraryService, LocalPlaylist, LocalPlaylistNotFoundError,
     LocalPlaylistStore,
 )
-from songmirror.services.playlist_exports import BACKUP_KIND, SCHEMA_VERSION
+from songmirror.services.playlist_exports import BACKUP_KIND, SCHEMA_VERSION, render_backup
 from songmirror.services.playlists import PlaylistService
 from songmirror.services.settings import SettingsStore
 from songmirror.services.sync_service import SyncService
@@ -84,7 +85,6 @@ def test_clone_from_provider_maps_tracks_and_binds_link(tmp_path, monkeypatch):
 
     assert playlist.name == "Español"
     assert playlist.links == {"spotify": "pl1"}
-    assert playlist.origin == {"provider": "spotify", "playlist_id": "pl1", "imported": False}
     assert len(playlist.tracks) == 1  # the unavailable ghost track was skipped
     track = playlist.tracks[0]
     assert track["name"] == "Song" and track["isrc"] == "ISRC1"
@@ -105,9 +105,15 @@ def _backup(playlists):
 def test_inspect_backup_rejects_wrong_kind_and_version(tmp_path):
     svc = _service(tmp_path)
     with pytest.raises(LocalLibraryError):
-        svc.inspect_backup({"kind": "something-else"})
+        svc.inspect_backup(json.dumps({"kind": "something-else"}))
     with pytest.raises(LocalLibraryError):
-        svc.inspect_backup({"kind": BACKUP_KIND, "schema_version": SCHEMA_VERSION + 1})
+        svc.inspect_backup(json.dumps({"kind": BACKUP_KIND, "schema_version": SCHEMA_VERSION + 1}))
+
+
+def test_inspect_backup_rejects_unrecognized_file_content(tmp_path):
+    svc = _service(tmp_path)
+    with pytest.raises(LocalLibraryError):
+        svc.inspect_backup("this is neither JSON nor XML")
 
 
 def test_import_backup_maps_tracks_without_binding_a_live_target(tmp_path):
@@ -121,11 +127,10 @@ def test_import_backup_maps_tracks_without_binding_a_live_target(tmp_path):
         ],
     }])
     svc = _service(tmp_path)
-    [playlist] = svc.import_backup(backup)
+    [playlist] = svc.import_backup(json.dumps(backup))
 
     assert playlist.name == "Español"
     assert playlist.links == {}  # never auto-bound to a live playlist
-    assert playlist.origin == {"provider": "spotify", "playlist_id": "pl1", "imported": True}
     track = playlist.tracks[0]
     assert track["links"] == {"spotify": {"id": "t1", "occurrence_id": ""}}  # catalog id kept, occurrence dropped
 
@@ -136,8 +141,44 @@ def test_import_backup_select_ids_filters_playlists(tmp_path):
         {"provider": "spotify", "id": "pl2", "name": "Skip", "description": "", "tracks": []},
     ])
     svc = _service(tmp_path)
-    imported = svc.import_backup(backup, select_ids=["pl1"])
+    imported = svc.import_backup(json.dumps(backup), select_ids=["pl1"])
     assert [p.name for p in imported] == ["Keep"]
+
+
+def _xml_backup_text(playlists):
+    """A genuine XML export, rendered through the app's own export path —
+    the most faithful stand-in for a file a user actually downloaded."""
+    result = render_backup("spotify", "Spotify", playlists, "xml")
+    return result.content.decode("utf-8")
+
+
+def test_inspect_and_import_accept_the_app_s_own_xml_export(tmp_path):
+    playlists = [{
+        "provider": "spotify", "id": "pl1", "name": "Español", "description": "",
+        "count": 2, "image": "", "owned": True, "editable": True, "external_url": "",
+        "tracks": [
+            {"position": 0, "id": "t1", "isrc": "ISRC1", "occurrence_id": "occ1",
+             "name": "Song", "artist": "Artist", "album": "Album", "album_position": 1,
+             "duration_ms": 1000, "image": "", "added_at": "2020", "external_url": "",
+             "unavailable": False},
+            {"position": 1, "id": "t2", "isrc": "", "occurrence_id": "",
+             "name": "Ghost", "artist": "Artist", "album": "", "album_position": None,
+             "duration_ms": None, "image": "", "added_at": "", "external_url": "",
+             "unavailable": True},
+        ],
+    }]
+    xml_text = _xml_backup_text(playlists)
+    svc = _service(tmp_path)
+
+    preview = svc.inspect_backup(xml_text)
+    assert preview["playlists"] == [{"id": "pl1", "name": "Español", "track_count": 2}]
+
+    [playlist] = svc.import_backup(xml_text)
+    assert playlist.name == "Español"
+    assert len(playlist.tracks) == 1  # the unavailable ghost track was skipped, same as the JSON path
+    track = playlist.tracks[0]
+    assert track["name"] == "Song" and track["isrc"] == "ISRC1"
+    assert track["duration_ms"] == 1000  # correctly coerced back from XML text to a real int, not "1000"
 
 
 class _FakeTarget:
