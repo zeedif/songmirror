@@ -12,14 +12,14 @@ interface Props {
   onSaved: () => void
 }
 
-/** Imports one or more playlists from a SongMirror backup JSON file (see the
- * Playlists page's Export menu). Only SongMirror's own lossless format is
- * accepted — reading it back is how a playlist moves between accounts or
- * SongMirror instances. Never binds a live resync target on import, since the
- * backup's playlist id may belong to a different account than what's
- * connected here. */
+/** Imports one or more playlists from a SongMirror backup file — either of
+ * SongMirror's own lossless export formats, JSON or XML (see the Playlists
+ * page's Export menu). The Soundiiz export isn't accepted: it carries no
+ * `kind`/`schema_version` envelope and drops fields a lossless round-trip
+ * needs. Never binds a live resync target on import, since the backup's
+ * playlist id may belong to a different account than what's connected here. */
 export function ImportBackupModal({ open, onClose, onSaved }: Props) {
-  const [backup, setBackup] = useState<unknown>(null)
+  const [content, setContent] = useState<string | null>(null)
   const [preview, setPreview] = useState<LocalPlaylistBackupPreview | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [fileName, setFileName] = useState('')
@@ -28,7 +28,7 @@ export function ImportBackupModal({ open, onClose, onSaved }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   function handleClose() {
-    setBackup(null)
+    setContent(null)
     setPreview(null)
     setSelected(new Set())
     setFileName('')
@@ -43,13 +43,12 @@ export function ImportBackupModal({ open, onClose, onSaved }: Props) {
     setFileName(file.name)
     try {
       const text = await file.text()
-      const parsed: unknown = JSON.parse(text)
-      const inspected = await api.inspectLocalPlaylistBackup(parsed)
-      setBackup(parsed)
+      const inspected = await api.inspectLocalPlaylistBackup(text)
+      setContent(text)
       setPreview(inspected)
       setSelected(new Set(inspected.playlists.map((p) => p.id)))
     } catch (err) {
-      setBackup(null)
+      setContent(null)
       setError(errorMessage(err))
     }
   }
@@ -64,11 +63,11 @@ export function ImportBackupModal({ open, onClose, onSaved }: Props) {
   }
 
   async function handleImport() {
-    if (!backup || selected.size === 0) return
+    if (!content || selected.size === 0) return
     setBusy(true)
     setError(null)
     try {
-      await api.importLocalPlaylistBackup(backup, [...selected])
+      await api.importLocalPlaylistBackup(content, [...selected])
       onSaved()
       handleClose()
     } catch (err) {
@@ -83,7 +82,7 @@ export function ImportBackupModal({ open, onClose, onSaved }: Props) {
       open={open}
       onClose={handleClose}
       title="Import a backup"
-      description="Pick a songmirror-*.json backup — from this instance, or one you downloaded from another account."
+      description="Pick a songmirror-*.json or *.xml backup — from this instance, or one you downloaded from another account."
       footer={
         <>
           <Button type="button" variant="secondary" onClick={handleClose} disabled={busy}>
@@ -103,7 +102,7 @@ export function ImportBackupModal({ open, onClose, onSaved }: Props) {
           <input
             ref={fileInputRef}
             type="file"
-            accept="application/json"
+            accept="application/json,application/xml,text/xml,.json,.xml"
             className="sr-only"
             onChange={(e) => {
               const file = e.target.files?.[0]

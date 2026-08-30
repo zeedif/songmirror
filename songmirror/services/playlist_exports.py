@@ -129,6 +129,74 @@ def _as_xml(backup):
     return ElementTree.tostring(root, encoding="utf-8", xml_declaration=True) + b"\n"
 
 
+_PLAYLIST_INT_FIELDS = frozenset({"count"})
+_PLAYLIST_BOOL_FIELDS = frozenset({"owned", "editable"})
+_TRACK_INT_FIELDS = frozenset({"position", "album_position", "duration_ms"})
+_TRACK_BOOL_FIELDS = frozenset({"unavailable"})
+
+
+def _xml_text(element):
+    if element is None or element.get("nil") == "true":
+        return None
+    return element.text
+
+
+def _xml_int(element):
+    text = _xml_text(element)
+    if text is None:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
+def _xml_bool(element):
+    return _xml_text(element) == "true"
+
+
+def _xml_row(element, fields, int_fields, bool_fields):
+    row = {}
+    for field in fields:
+        child = element.find(field)
+        if field in int_fields:
+            row[field] = _xml_int(child)
+        elif field in bool_fields:
+            row[field] = _xml_bool(child)
+        else:
+            row[field] = _xml_text(child)
+    return row
+
+
+def parse_xml_backup(content):
+    """Reverse of _as_xml(): parse a SongMirror XML backup back into the same
+    dict shape build_backup() produces, so it can be validated/consumed
+    exactly like a JSON one. Raises xml.etree.ElementTree.ParseError on
+    malformed XML — callers decide how to report that."""
+    root = ElementTree.fromstring(content)
+    provider_el = root.find("provider")
+    playlists = []
+    for playlist_el in root.findall("playlists/playlist"):
+        playlist = _xml_row(playlist_el, _PLAYLIST_FIELDS, _PLAYLIST_INT_FIELDS, _PLAYLIST_BOOL_FIELDS)
+        playlist["tracks"] = [
+            _xml_row(track_el, _TRACK_FIELDS, _TRACK_INT_FIELDS, _TRACK_BOOL_FIELDS)
+            for track_el in playlist_el.findall("tracks/track")
+        ]
+        playlists.append(playlist)
+    return {
+        "kind": root.tag,
+        "schema_version": _xml_int(root.find("schema_version")),
+        "exported_at": _xml_text(root.find("exported_at")),
+        "provider": {
+            "id": _xml_text(provider_el.find("id")) if provider_el is not None else "",
+            "name": _xml_text(provider_el.find("name")) if provider_el is not None else "",
+        },
+        "playlist_count": _xml_int(root.find("playlist_count")),
+        "track_count": _xml_int(root.find("track_count")),
+        "playlists": playlists,
+    }
+
+
 def _filename_part(value, fallback):
     value = re.sub(r"[^a-z0-9]+", "-", anyascii(str(value)).casefold()).strip("-")
     return (value[:80].rstrip("-") or fallback)

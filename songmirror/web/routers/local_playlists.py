@@ -40,12 +40,14 @@ def clone_local_playlist(request: Request, body: dict = Body(...)):
 
 @router.post("/api/local-playlists/import/inspect")
 def inspect_local_playlist_backup(request: Request, body: dict = Body(...)):
-    return _handled(_service(request).inspect_backup, body)
+    """`content` is the raw backup file text (JSON or XML) — parsing happens
+    server-side so the browser never has to guess the format."""
+    return _handled(_service(request).inspect_backup, body["content"])
 
 
 @router.post("/api/local-playlists/import")
 def import_local_playlist_backup(request: Request, body: dict = Body(...)):
-    imported = _handled(_service(request).import_backup, body["backup"], body.get("select_ids"))
+    imported = _handled(_service(request).import_backup, body["content"], body.get("select_ids"))
     return [asdict(p) for p in imported]
 
 

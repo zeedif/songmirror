@@ -14,6 +14,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from xml.etree import ElementTree
 
 from ..engine import logs, spotify, spotify_cookie
 from ..engine.config import parse_args, spotify_write_backend
@@ -21,7 +22,7 @@ from ..engine.matching import compute_diff, protect_removals
 from ..engine.runner import load_cache, save_cache
 from ..engine.targets import build_one
 from ..engine.targets.base import TargetAuthError, TargetTransientError, _split_add_results
-from .playlist_exports import BACKUP_KIND, SCHEMA_VERSION
+from .playlist_exports import BACKUP_KIND, SCHEMA_VERSION, parse_xml_backup
 from .playlists import PlaylistService
 from .settings import _open_private
 
@@ -109,7 +110,6 @@ class LocalPlaylist:
     image: str = ""
     tracks: list = field(default_factory=list)         # list[dict], see _local_track_from_row
     links: dict = field(default_factory=dict)           # provider_id -> playlist_id (resync target)
-    origin: dict | None = None                          # {"provider", "playlist_id", "imported"}
     created_at: str = ""
     updated_at: str = ""
     id: str = ""
@@ -222,12 +222,23 @@ class LocalLibraryService:
             image=detail.get("image") or "",
             tracks=tracks,
             links={provider_id: detail["id"]},
-            origin={"provider": provider_id, "playlist_id": detail["id"], "imported": False},
         )
         return self._store.upsert(playlist)
 
     @staticmethod
-    def _validate_backup(data):
+    def _parse_backup(content):
+        """Accept either of SongMirror's own lossless backup encodings (see
+        services/playlist_exports.py) — JSON or XML — and return the same
+        normalized dict shape either way. `content` is the raw file text."""
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            try:
+                data = parse_xml_backup(content)
+            except ElementTree.ParseError as exc:
+                raise LocalLibraryError(
+                    "That file isn't a SongMirror playlist backup (unrecognized format)."
+                ) from exc
         if not isinstance(data, dict) or data.get("kind") != BACKUP_KIND:
             raise LocalLibraryError("That file isn't a SongMirror playlist backup.")
         if data.get("schema_version") != SCHEMA_VERSION:
@@ -235,10 +246,11 @@ class LocalLibraryService:
                 f"Unsupported backup schema version {data.get('schema_version')!r} — "
                 f"this SongMirror only reads version {SCHEMA_VERSION}."
             )
+        return data
 
-    def inspect_backup(self, data):
+    def inspect_backup(self, content):
         """Stateless preview of a backup file's playlists for the import picker."""
-        self._validate_backup(data)
+        data = self._parse_backup(content)
         return {
             "provider": data.get("provider") or {},
             "playlists": [
@@ -248,11 +260,12 @@ class LocalLibraryService:
             ],
         }
 
-    def import_backup(self, data, select_ids=None):
-        """Import one or more playlists from a SongMirror backup. Never
-        auto-binds a live resync target — the backup's playlist id may belong
-        to a different account/instance than whatever is connected here."""
-        self._validate_backup(data)
+    def import_backup(self, content, select_ids=None):
+        """Import one or more playlists from a SongMirror backup (JSON or
+        XML). Never auto-binds a live resync target — the backup's playlist id
+        may belong to a different account/instance than whatever is connected
+        here."""
+        data = self._parse_backup(content)
         provider_id = (data.get("provider") or {}).get("id") or ""
         wanted = {str(i) for i in select_ids} if select_ids else None
         imported = []
@@ -268,7 +281,6 @@ class LocalLibraryService:
                 description=entry.get("description") or "",
                 image=entry.get("image") or "",
                 tracks=tracks,
-                origin={"provider": provider_id, "playlist_id": entry.get("id"), "imported": True},
             )
             imported.append(self._store.upsert(playlist))
         return imported
