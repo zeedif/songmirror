@@ -162,6 +162,7 @@ export function useEventStream() {
   const clear = useCallback(() => {
     setEvents([])
     setActivity(emptyActivity())
+    persistEvents([])
   }, [])
 
   return { events, counters: activity.counters, breakdown: activity.byProvider,
