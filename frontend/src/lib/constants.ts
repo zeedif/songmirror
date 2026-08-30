@@ -49,6 +49,7 @@ const SERVICE_STYLES: Record<string, ServiceStyle> = {
   sync: { label: 'Sync engine', dot: 'bg-accent', soft: 'bg-accent-soft', text: 'text-accent' },
   local: { label: 'Download mirror', dot: 'bg-info', soft: 'bg-info-soft', text: 'text-info' },
   transfer: { label: 'Playlist transfers', dot: 'bg-info', soft: 'bg-info-soft', text: 'text-info' },
+  library: { label: 'Local library', dot: 'bg-neutral', soft: 'bg-neutral-soft', text: 'text-neutral' },
 }
 const SOURCE_ALIASES: Record<string, string> = {
   jelly: 'jellyfin',

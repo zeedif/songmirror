@@ -5,6 +5,10 @@ import type {
   Account,
   ConnectResponse,
   LinkUpsertRequest,
+  LocalPlaylist,
+  LocalPlaylistBackupPreview,
+  LocalPlaylistCompareResult,
+  LocalPlaylistPushJob,
   OkResponse,
   PlaylistLink,
   PlaylistExportFormat,
@@ -218,6 +222,48 @@ export const api = {
   stopTransfer: (id: string) => request<TransferControlResponse>(`/api/transfers/${encodeURIComponent(id)}/stop`, { method: 'POST' }),
   resolveTransferConflict: (id: string, body: ResolveConflictRequest) =>
     request<OkResponse>(`/api/transfers/${encodeURIComponent(id)}/resolve`, json(body)),
+
+  // Local playlist library
+  getLocalPlaylists: () => request<LocalPlaylist[]>('/api/local-playlists'),
+  getLocalPlaylist: (id: string) => request<LocalPlaylist>(`/api/local-playlists/${encodeURIComponent(id)}`),
+  createLocalPlaylist: (name: string, description = '') =>
+    request<LocalPlaylist>('/api/local-playlists', json({ name, description })),
+  updateLocalPlaylist: (id: string, values: { name?: string; description?: string }) =>
+    request<LocalPlaylist>(`/api/local-playlists/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(values) }),
+  deleteLocalPlaylist: (id: string) => request<OkResponse>(`/api/local-playlists/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  cloneLocalPlaylist: (provider: string, playlistId: string) =>
+    request<LocalPlaylist>('/api/local-playlists/clone', json({ provider, playlist_id: playlistId })),
+  inspectLocalPlaylistBackup: (backup: unknown) =>
+    request<LocalPlaylistBackupPreview>('/api/local-playlists/import/inspect', json(backup)),
+  importLocalPlaylistBackup: (backup: unknown, selectIds?: string[]) =>
+    request<LocalPlaylist[]>('/api/local-playlists/import', json({ backup, select_ids: selectIds })),
+  addLocalPlaylistTrack: (
+    id: string,
+    values: { name: string; artist?: string; album?: string; isrc?: string; duration_ms?: number | null },
+  ) => request<LocalPlaylist>(`/api/local-playlists/${encodeURIComponent(id)}/tracks`, json(values)),
+  removeLocalPlaylistTracks: (id: string, trackIds: string[]) =>
+    request<LocalPlaylist>(`/api/local-playlists/${encodeURIComponent(id)}/tracks`, {
+      method: 'DELETE',
+      body: JSON.stringify({ track_ids: trackIds }),
+    }),
+  bindLocalPlaylist: (id: string, provider: string, playlistId: string | null) =>
+    request<LocalPlaylist>(`/api/local-playlists/${encodeURIComponent(id)}/bind`, json({ provider, playlist_id: playlistId })),
+  compareLocalPlaylist: (id: string, provider: string) =>
+    request<LocalPlaylistCompareResult>(
+      `/api/local-playlists/${encodeURIComponent(id)}/compare/${encodeURIComponent(provider)}`,
+    ),
+  pullLocalPlaylist: (id: string, provider: string, trackIds: string[]) =>
+    request<LocalPlaylist>(
+      `/api/local-playlists/${encodeURIComponent(id)}/pull/${encodeURIComponent(provider)}`,
+      json({ track_ids: trackIds }),
+    ),
+  pushLocalPlaylist: (id: string, provider: string, body: { execute: boolean; allow_removals: boolean; max_removals: number }) =>
+    request<{ job_id: string }>(
+      `/api/local-playlists/${encodeURIComponent(id)}/push/${encodeURIComponent(provider)}`,
+      json(body),
+    ),
+  getLocalPlaylistPushJob: (jobId: string) =>
+    request<LocalPlaylistPushJob>(`/api/local-playlists/push-jobs/${encodeURIComponent(jobId)}`),
 }
 
 export function errorMessage(err: unknown): string {

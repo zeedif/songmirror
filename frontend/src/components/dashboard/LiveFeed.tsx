@@ -8,6 +8,7 @@ import {
   LuHistory,
   LuInfo,
   LuLayers3,
+  LuLibrary,
   LuListFilter,
   LuListMinus,
   LuListPlus,
@@ -167,6 +168,7 @@ function ServiceOptionMark({ tag }: { tag: string }) {
   if (tag === 'sync') return <LuRefreshCw className="size-3.5 text-accent" />
   if (tag === 'local') return <LuDownload className="size-3.5 text-info" />
   if (tag === 'transfer') return <LuArrowRightLeft className="size-3.5 text-info" />
+  if (tag === 'library') return <LuLibrary className="size-3.5 text-neutral" />
   const logo = serviceLogoId(tag)
   return logo ? (
     <ServiceLogo service={logo} className={cn('size-3.5', tagText(tag))} />
@@ -179,6 +181,7 @@ const INTERNAL_SOURCE_HINTS: Record<string, string> = {
   sync: 'Run status and safety messages',
   local: 'Music files saved on this server',
   transfer: 'One-time playlist copy jobs',
+  library: 'Local playlist library pushes',
 }
 
 interface LiveFeedProps {
