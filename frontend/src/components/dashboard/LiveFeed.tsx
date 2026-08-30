@@ -16,6 +16,7 @@ import {
   LuSearch,
   LuSearchX,
   LuSlidersHorizontal,
+  LuTrash2,
   LuTriangleAlert,
   LuX,
 } from 'react-icons/lu'
@@ -189,7 +190,7 @@ interface LiveFeedProps {
  * ledger, while the persisted event stream can be searched, sliced and sorted
  * without changing what the sync engine records. */
 export function LiveFeed({ accounts = null, syncs = null }: LiveFeedProps = {}) {
-  const { events, counters, breakdown, holdReasons, connected } = useEventStream()
+  const { events, counters, breakdown, holdReasons, connected, clear } = useEventStream()
   const [query, setQuery] = useState('')
   const [source, setSource] = useState('all')
   const [kind, setKind] = useState<KindFilter>('all')
@@ -250,6 +251,17 @@ export function LiveFeed({ accounts = null, syncs = null }: LiveFeedProps = {}) 
             aria-hidden="true"
           />
           <span className="font-mono text-[10.5px] font-semibold tracking-wide text-text-3">LIVE FEED</span>
+          {events.length > 0 && (
+            <button
+              type="button"
+              onClick={clear}
+              aria-label="Clear activity feed"
+              className="inline-flex h-6 shrink-0 items-center gap-1.5 rounded-control px-2 text-[11px] font-semibold text-text-3 transition-colors duration-fast hover:bg-surface hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20"
+            >
+              <LuTrash2 className="size-3" aria-hidden="true" />
+              Clear
+            </button>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="mr-1 font-mono text-[10.5px] tracking-wide text-text-3">THIS PASS</span>
