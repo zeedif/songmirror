@@ -23,6 +23,7 @@ import { EmptyState } from '../ui/EmptyState'
 import { FIELD_INPUT_CLASSES } from '../ui/fieldStyles'
 import { FilterSelect } from '../ui/FilterSelect'
 import { Modal } from '../ui/Modal'
+import { SelectionQuickActions } from '../ui/SelectionQuickActions'
 import { LoadingStatus, Skeleton } from '../ui/Skeleton'
 import { Spinner } from '../ui/Spinner'
 import { PlaylistExportActions } from './PlaylistExportActions'
@@ -195,6 +196,16 @@ export function PlaylistDetailModal({ account, playlist, onClose, onChanged }: P
     setBulkConfirming(false)
   }
 
+  function selectAll() {
+    setSelectedKeys(new Set(orderedTracks.map(trackKey)))
+    setBulkConfirming(false)
+  }
+
+  function invertSelection() {
+    setSelectedKeys((current) => new Set(orderedTracks.filter((track) => !current.has(trackKey(track))).map(trackKey)))
+    setBulkConfirming(false)
+  }
+
   async function removeTrack(track: ProviderPlaylistTrack) {
     if (!provider || !playlistId) return
     const key = trackKey(track)
@@ -357,6 +368,19 @@ export function PlaylistDetailModal({ account, playlist, onClose, onChanged }: P
           </div>
         ) : null}
 
+        {detail?.editable && orderedTracks.length > 0 ? (
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-text-3">Shift-click a track to select a range.</p>
+            <SelectionQuickActions
+              total={orderedTracks.length}
+              selectedCount={selectedTracks.length}
+              onSelectAll={selectAll}
+              onSelectNone={clearSelection}
+              onInvert={invertSelection}
+            />
+          </div>
+        ) : null}
+
         {detail?.editable && selectedTracks.length > 0 ? (
           <div className="rounded-control border border-accent/30 bg-accent-soft px-3.5 py-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -364,12 +388,8 @@ export function PlaylistDetailModal({ account, playlist, onClose, onChanged }: P
                 <p className="text-sm font-semibold text-text">
                   {selectedTracks.length} {selectedTracks.length === 1 ? 'track' : 'tracks'} selected
                 </p>
-                <p className="mt-0.5 text-xs text-text-3">Shift-click another track to select a range.</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button variant="ghost" size="sm" onClick={clearSelection} disabled={bulkRemoving}>
-                  Clear
-                </Button>
                 <Button
                   variant="danger-ghost"
                   size="sm"
