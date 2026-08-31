@@ -9,14 +9,28 @@ import { ServiceLogo } from '../ui/ServiceLogo'
 interface Props {
   playlist: LocalPlaylist
   onOpen: () => void
+  selected: boolean
+  onToggleSelect: () => void
 }
 
-export function LocalPlaylistCard({ playlist, onOpen }: Props) {
+export function LocalPlaylistCard({ playlist, onOpen, selected, onToggleSelect }: Props) {
   const boundProviders = Object.keys(playlist.links).filter((id) => serviceLogoId(id) !== null)
 
   return (
-    <Card className="overflow-hidden p-0">
-      <button type="button" onClick={onOpen} className="flex w-full flex-col gap-3 p-4 text-left hover:bg-surface-2 sm:p-5">
+    <Card className={cn('relative overflow-hidden p-0', selected && 'ring-2 ring-accent')}>
+      <label
+        className="absolute left-2.5 top-2.5 z-10 flex size-7 cursor-pointer items-center justify-center rounded-control bg-surface/90 shadow-sm backdrop-blur-sm"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggleSelect}
+          aria-label={`Select ${playlist.name}`}
+          className="size-4 accent-accent"
+        />
+      </label>
+      <button type="button" onClick={onOpen} className="flex w-full flex-col gap-3 p-4 pl-12 text-left hover:bg-surface-2 sm:p-5 sm:pl-14">
         <div className="flex items-center gap-3">
           <CoverArt image={playlist.image} className="size-11" />
           <div className="min-w-0 flex-1">

@@ -13,6 +13,7 @@ import { CoverArt } from '../ui/CoverArt'
 import { Modal } from '../ui/Modal'
 import { PlaylistPickerField } from '../ui/PlaylistPickerField'
 import { SelectField } from '../ui/SelectField'
+import { SelectionQuickActions } from '../ui/SelectionQuickActions'
 import { ServiceLogo } from '../ui/ServiceLogo'
 import { TextField } from '../ui/TextField'
 import { Toggle } from '../ui/Toggle'
@@ -235,6 +236,12 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
 
   const boundLiveId = playlist?.links[provider] ?? ''
   const providerName = connected.find((a) => a.id === provider)?.name ?? 'this service'
+  const nothingToRemove = compareResult !== null && compareResult.provider_only.length === 0
+  const removalsDescription = !compareResult
+    ? `When pushing, also delete tracks on ${providerName} that aren't in this local playlist. Off by default — a push only ever adds unless you turn this on.`
+    : nothingToRemove
+      ? `Nothing on ${providerName} to delete right now.`
+      : `Also delete the ${compareResult.provider_only.length} track${compareResult.provider_only.length === 1 ? '' : 's'} above marked "Only on ${providerName}".`
 
   return (
     <>
@@ -267,15 +274,26 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
             {error && <p className="rounded-control bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
             <section className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-[12.5px] font-semibold text-text-2">
                   Tracks ({playlist.tracks.length})
                 </p>
-                {selectedTrackIds.size > 0 && (
-                  <Button variant="danger-ghost" size="sm" onClick={() => void handleRemoveSelected()}>
-                    Remove {selectedTrackIds.size} selected
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  <SelectionQuickActions
+                    total={playlist.tracks.length}
+                    selectedCount={selectedTrackIds.size}
+                    onSelectAll={() => setSelectedTrackIds(new Set(playlist.tracks.map((t) => t.id)))}
+                    onSelectNone={() => setSelectedTrackIds(new Set())}
+                    onInvert={() =>
+                      setSelectedTrackIds(new Set(playlist.tracks.filter((t) => !selectedTrackIds.has(t.id)).map((t) => t.id)))
+                    }
+                  />
+                  {selectedTrackIds.size > 0 && (
+                    <Button variant="danger-ghost" size="sm" onClick={() => void handleRemoveSelected()}>
+                      Remove {selectedTrackIds.size} selected
+                    </Button>
+                  )}
+                </div>
               </div>
               {playlist.tracks.length === 0 ? (
                 <p className="rounded-control border border-dashed border-border-strong px-3 py-4 text-center text-sm text-text-3">
@@ -378,15 +396,28 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
                             )}
                           </div>
                           <div className="flex flex-col gap-1.5">
-                            <div className="flex items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
                               <p className="font-mono text-[10.5px] font-semibold uppercase tracking-wide text-text-3">
                                 Only on {providerName} ({compareResult.provider_only.length})
                               </p>
-                              {selectedPullIds.size > 0 && (
-                                <Button variant="secondary" size="sm" loading={pulling} onClick={() => void handlePull()}>
-                                  Pull {selectedPullIds.size} into this playlist
-                                </Button>
-                              )}
+                              <div className="flex items-center gap-2">
+                                <SelectionQuickActions
+                                  total={compareResult.provider_only.length}
+                                  selectedCount={selectedPullIds.size}
+                                  onSelectAll={() => setSelectedPullIds(new Set(compareResult.provider_only.map((t) => t.id)))}
+                                  onSelectNone={() => setSelectedPullIds(new Set())}
+                                  onInvert={() =>
+                                    setSelectedPullIds(
+                                      new Set(compareResult.provider_only.filter((t) => !selectedPullIds.has(t.id)).map((t) => t.id)),
+                                    )
+                                  }
+                                />
+                                {selectedPullIds.size > 0 && (
+                                  <Button variant="secondary" size="sm" loading={pulling} onClick={() => void handlePull()}>
+                                    Pull {selectedPullIds.size} into this playlist
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                             {compareResult.provider_only.length === 0 ? (
                               <p className="rounded-control border border-dashed border-border-strong px-3 py-3 text-center text-xs text-text-3">
@@ -409,17 +440,13 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
 
                       <div className="flex flex-col gap-3 rounded-control border border-border bg-surface-2/45 p-3">
                         <Toggle
-                          checked={allowRemovals}
+                          checked={allowRemovals && !nothingToRemove}
                           onChange={setAllowRemovals}
+                          disabled={nothingToRemove}
                           label={`Delete extras on ${providerName}`}
-                          description={`When pushing, also delete the tracks on ${providerName} that aren't in this local playlist (shown above as "Only on ${providerName}"). Off by default — a push only ever adds unless you turn this on.`}
+                          description={removalsDescription}
                         />
-                        {compareResult && compareResult.provider_only.length === 0 && (
-                          <p className="text-xs text-text-3">
-                            Nothing on {providerName} would be deleted right now — there's nothing extra there. Pulling a track above also takes it out of this list.
-                          </p>
-                        )}
-                        {allowRemovals && (
+                        {allowRemovals && !nothingToRemove && (
                           <TextField
                             label="Removal cap"
                             help="A push stops and holds removals back if more than this many would be removed."

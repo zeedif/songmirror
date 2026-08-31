@@ -5,6 +5,7 @@ import type { LocalPlaylistBackupPreview } from '@/types'
 
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
+import { SelectionQuickActions } from '../ui/SelectionQuickActions'
 
 interface Props {
   open: boolean
@@ -113,9 +114,18 @@ export function ImportBackupModal({ open, onClose, onSaved }: Props) {
 
         {preview && (
           <div className="flex flex-col gap-2">
-            <p className="text-[12.5px] font-semibold text-text-2">
-              {preview.playlists.length} playlist{preview.playlists.length === 1 ? '' : 's'} in this backup
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[12.5px] font-semibold text-text-2">
+                {preview.playlists.length} playlist{preview.playlists.length === 1 ? '' : 's'} in this backup
+              </p>
+              <SelectionQuickActions
+                total={preview.playlists.length}
+                selectedCount={selected.size}
+                onSelectAll={() => setSelected(new Set(preview.playlists.map((p) => p.id)))}
+                onSelectNone={() => setSelected(new Set())}
+                onInvert={() => setSelected(new Set(preview.playlists.filter((p) => !selected.has(p.id)).map((p) => p.id)))}
+              />
+            </div>
             <div className="thin-scrollbar flex max-h-64 flex-col gap-1 overflow-y-auto rounded-control border border-border p-1.5">
               {preview.playlists.map((p) => (
                 <label
