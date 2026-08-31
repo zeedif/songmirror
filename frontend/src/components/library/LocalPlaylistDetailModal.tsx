@@ -71,6 +71,10 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
   const [addArtist, setAddArtist] = useState('')
   const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set())
 
+  const [editName, setEditName] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [savingDetails, setSavingDetails] = useState(false)
+
   const [provider, setProvider] = useState('')
   const [compareResult, setCompareResult] = useState<LocalPlaylistCompareResult | null>(null)
   const [comparing, setComparing] = useState(false)
@@ -112,6 +116,17 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
   }, [playlistId, load])
 
   useEffect(() => {
+    if (playlist) {
+      setEditName(playlist.name)
+      setEditDescription(playlist.description)
+    }
+    // Re-sync only when a *different* playlist loads, not on every edit to
+    // the same one (e.g. adding a track) — that would blow away in-progress
+    // typing in the name/description fields below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [playlist?.id])
+
+  useEffect(() => {
     if (!pushJob || pushJob.status === 'done' || pushJob.status === 'error') return
     const timer = window.setTimeout(async () => {
       try {
@@ -143,6 +158,23 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
     })
   }
 
+  async function handleSaveDetails() {
+    if (!playlist || !editName.trim()) return
+    setSavingDetails(true)
+    setError(null)
+    try {
+      setPlaylist(await api.updateLocalPlaylist(playlist.id, {
+        name: editName.trim(),
+        description: editDescription.trim(),
+      }))
+      onChanged()
+    } catch (err) {
+      setError(errorMessage(err))
+    } finally {
+      setSavingDetails(false)
+    }
+  }
+
   async function handleAddTrack(e: React.FormEvent) {
     e.preventDefault()
     if (!playlist || !addName.trim()) return
@@ -150,6 +182,7 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
       setPlaylist(await api.addLocalPlaylistTrack(playlist.id, { name: addName.trim(), artist: addArtist.trim() }))
       setAddName('')
       setAddArtist('')
+      onChanged()
     } catch (err) {
       setError(errorMessage(err))
     }
@@ -160,6 +193,7 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
     try {
       setPlaylist(await api.removeLocalPlaylistTracks(playlist.id, [...selectedTrackIds]))
       setSelectedTrackIds(new Set())
+      onChanged()
     } catch (err) {
       setError(errorMessage(err))
     }
@@ -197,6 +231,7 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
       setPlaylist(await api.pullLocalPlaylist(playlist.id, provider, [...selectedPullIds]))
       setCompareResult(null)
       setSelectedPullIds(new Set())
+      onChanged()
     } catch (err) {
       setError(errorMessage(err))
     } finally {
@@ -274,6 +309,32 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
             {error && <p className="rounded-control bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
 
             <section className="flex flex-col gap-3">
+              <p className="text-[12.5px] font-semibold text-text-2">Details</p>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-0 flex-1">
+                  <TextField label="Name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                </div>
+                <div className="min-w-0 flex-[2]">
+                  <TextField
+                    label="Description"
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                  />
+                </div>
+                <Button
+                  onClick={() => void handleSaveDetails()}
+                  loading={savingDetails}
+                  disabled={
+                    !editName.trim()
+                    || (editName.trim() === playlist.name && editDescription.trim() === playlist.description)
+                  }
+                >
+                  Save
+                </Button>
+              </div>
+            </section>
+
+            <section className="flex flex-col gap-3 border-t border-border pt-5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-[12.5px] font-semibold text-text-2">
                   Tracks ({playlist.tracks.length})

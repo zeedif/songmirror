@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { LuTrash2 } from 'react-icons/lu'
+import { useMemo, useState } from 'react'
+import { LuArrowDownUp, LuTrash2 } from 'react-icons/lu'
 
 import { api, errorMessage } from '@/api'
 import { CloneFromProviderModal } from '@/components/library/CloneFromProviderModal'
@@ -10,12 +10,21 @@ import { LocalPlaylistDetailModal } from '@/components/library/LocalPlaylistDeta
 import { Button } from '@/components/ui/Button'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { FilterSelect } from '@/components/ui/FilterSelect'
 import { SelectionQuickActions } from '@/components/ui/SelectionQuickActions'
 import { LoadingStatus, Skeleton } from '@/components/ui/Skeleton'
 import { useAccounts } from '@/hooks/useAccounts'
 import { useLocalPlaylists } from '@/hooks/useLocalPlaylists'
 
 type ModalTarget = 'create' | 'clone' | 'import' | null
+type SortOrder = 'name-asc' | 'name-desc' | 'updated-desc' | 'updated-asc'
+
+const SORT_OPTIONS: Array<{ value: SortOrder; label: string }> = [
+  { value: 'name-asc', label: 'Name (A–Z)' },
+  { value: 'name-desc', label: 'Name (Z–A)' },
+  { value: 'updated-desc', label: 'Recently modified' },
+  { value: 'updated-asc', label: 'Oldest modified' },
+]
 
 export default function Library() {
   const { accounts } = useAccounts()
@@ -26,6 +35,21 @@ export default function Library() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkError, setBulkError] = useState<string | null>(null)
+  const [sortOrder, setSortOrder] = useState<SortOrder>('name-asc')
+
+  const sortedPlaylists = useMemo(() => {
+    if (!playlists) return null
+    const sorted = [...playlists]
+    sorted.sort((a, b) => {
+      switch (sortOrder) {
+        case 'name-asc': return a.name.localeCompare(b.name)
+        case 'name-desc': return b.name.localeCompare(a.name)
+        case 'updated-desc': return b.updated_at.localeCompare(a.updated_at)
+        case 'updated-asc': return a.updated_at.localeCompare(b.updated_at)
+      }
+    })
+    return sorted
+  }, [playlists, sortOrder])
 
   function handleSaved() {
     setModal(null)
@@ -89,16 +113,28 @@ export default function Library() {
             ))}
           </div>
         </LoadingStatus>
-      ) : playlists && playlists.length > 0 ? (
+      ) : sortedPlaylists && sortedPlaylists.length > 0 ? (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <SelectionQuickActions
-              total={playlists.length}
-              selectedCount={selectedIds.size}
-              onSelectAll={() => setSelectedIds(new Set(playlists.map((p) => p.id)))}
-              onSelectNone={() => setSelectedIds(new Set())}
-              onInvert={() => setSelectedIds(new Set(playlists.filter((p) => !selectedIds.has(p.id)).map((p) => p.id)))}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <FilterSelect
+                ariaLabel="Sort your library"
+                caption="Order"
+                value={sortOrder}
+                options={SORT_OPTIONS}
+                onChange={setSortOrder}
+                icon={<LuArrowDownUp className="size-3.5" />}
+              />
+              <SelectionQuickActions
+                total={sortedPlaylists.length}
+                selectedCount={selectedIds.size}
+                onSelectAll={() => setSelectedIds(new Set(sortedPlaylists.map((p) => p.id)))}
+                onSelectNone={() => setSelectedIds(new Set())}
+                onInvert={() =>
+                  setSelectedIds(new Set(sortedPlaylists.filter((p) => !selectedIds.has(p.id)).map((p) => p.id)))
+                }
+              />
+            </div>
             {selectedIds.size > 0 && (
               <Button
                 variant="danger-ghost"
@@ -111,7 +147,7 @@ export default function Library() {
             )}
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {playlists.map((playlist) => (
+            {sortedPlaylists.map((playlist) => (
               <LocalPlaylistCard
                 key={playlist.id}
                 playlist={playlist}
