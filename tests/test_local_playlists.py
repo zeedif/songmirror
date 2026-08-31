@@ -230,6 +230,26 @@ def test_compare_reports_push_adds_and_provider_only_tracks(tmp_path):
     assert [t["name"] for t in result["provider_only"]] == ["Provider Only"]
 
 
+def test_compare_handles_provider_tracks_with_no_singular_artist_key(tmp_path):
+    """Spotify's raw playlist-track dict (every read path) carries only an
+    "artists" list, no "artist" string, unlike every other provider — this
+    used to crash compute_diff() with a KeyError."""
+    svc = _service(tmp_path)
+    playlist = svc.create("Mixtape")
+    playlist = svc.add_track(playlist.id, name="Local Only", artist="A")
+    target = _FakeTarget(
+        [{"id": "p1", "name": "Provider Only", "artists": ["B"], "duration_ms": 1000}],
+        tmp_path / "cache.json",
+    )
+    svc.bind(playlist.id, "apple", "dest1")
+    svc._target = lambda provider_id: target
+
+    result = svc.compare(playlist.id, "apple")
+    assert [t["name"] for t in result["to_push_add"]] == ["Local Only"]
+    assert [t["name"] for t in result["provider_only"]] == ["Provider Only"]
+    assert result["provider_only"][0]["artist"] == "B"
+
+
 def test_compare_requires_a_bound_playlist(tmp_path):
     svc = _service(tmp_path)
     playlist = svc.create("Mixtape")
@@ -251,6 +271,20 @@ def test_pull_merges_selected_provider_tracks(tmp_path):
     assert len(playlist.tracks) == 1
     assert playlist.tracks[0]["name"] == "Provider Track"
     assert playlist.tracks[0]["links"] == {"apple": {"id": "p1", "occurrence_id": ""}}
+
+
+def test_pull_derives_artist_from_artists_list_when_singular_key_missing(tmp_path):
+    svc = _service(tmp_path)
+    playlist = svc.create("Mixtape")
+    target = _FakeTarget(
+        [{"id": "p1", "name": "Provider Track", "artists": ["B"], "duration_ms": 1000}],
+        tmp_path / "cache.json",
+    )
+    svc.bind(playlist.id, "apple", "dest1")
+    svc._target = lambda provider_id: target
+
+    playlist = svc.pull(playlist.id, "apple", ["p1"])
+    assert playlist.tracks[0]["artist"] == "B"
 
 
 async def _await_job(svc, job_id):
@@ -350,6 +384,32 @@ def test_push_removals_apply_when_allowed_and_under_cap(tmp_path):
 
         job = svc.submit_push(playlist.id, "apple", execute=True, allow_removals=True, max_removals=5)
         finished = await _await_job(svc, job["id"])
+        assert finished["removed"] == 1
+        assert len(target.removed) == 1
+
+    asyncio.run(scenario())
+
+
+def test_push_removal_handles_provider_tracks_with_no_singular_artist_key(tmp_path):
+    """Same Spotify-shaped-track regression as compare(), but on the push path
+    — the removal emit line also indexed "artist" directly."""
+    async def scenario():
+        bus = EventBus()
+        bus.bind_loop(asyncio.get_running_loop())
+        settings = SettingsStore(dir=tmp_path)
+        sync = SyncService(settings, bus)
+        svc = LocalLibraryService(settings, bus, sync, store=LocalPlaylistStore(dir=tmp_path))
+        playlist = svc.create("Mixtape")
+        target = _FakeTarget(
+            [{"id": "p1", "name": "Only On Provider", "artists": ["B"], "duration_ms": 1000}],
+            tmp_path / "cache.json",
+        )
+        svc.bind(playlist.id, "apple", "dest1")
+        svc._target = lambda provider_id: target
+
+        job = svc.submit_push(playlist.id, "apple", execute=True, allow_removals=True, max_removals=5)
+        finished = await _await_job(svc, job["id"])
+        assert finished["status"] == "done"
         assert finished["removed"] == 1
         assert len(target.removed) == 1
 

@@ -80,6 +80,17 @@ def _as_source_track(local_track):
     }
 
 
+def _with_artist(track):
+    """Spotify's raw playlist-track dict (all three read paths: official API,
+    cookie, and web-scraper fallback) carries only an "artists" list, no
+    singular "artist" string — unlike every other target. compute_diff() and
+    the emit/pull code below index "artist" directly, so patch it in without
+    disturbing any other raw field track_id()/remove() still need."""
+    if track.get("artist"):
+        return track
+    return {**track, "artist": ", ".join(a for a in track.get("artists") or [] if a)}
+
+
 def _expected_ids(local_tracks, provider_id):
     expected = {}
     for t in local_tracks:
@@ -322,7 +333,7 @@ class LocalLibraryService:
         playlist = self.get(playlist_id)
         target = self._target(provider_id)
         dest_playlist = self._bound_playlist(playlist, provider_id, target)
-        raw_provider_tracks = target.playlist_tracks(dest_playlist)
+        raw_provider_tracks = [_with_artist(t) for t in target.playlist_tracks(dest_playlist)]
         source_tracks = [_as_source_track(t) for t in playlist.tracks]
         expected = _expected_ids(playlist.tracks, provider_id)
         to_add, to_remove = compute_diff(source_tracks, raw_provider_tracks, expected, target.track_id)
@@ -340,6 +351,7 @@ class LocalLibraryService:
         wanted = {str(i) for i in track_ids}
         occurrence_of = getattr(target, "occurrence_id", lambda track: None)
         for raw in target.playlist_tracks(dest_playlist):
+            raw = _with_artist(raw)
             tid = target.track_id(raw)
             if tid is None or str(tid) not in wanted:
                 continue
@@ -411,7 +423,7 @@ class LocalLibraryService:
         tag = "library"
         self._emit("section", f"push: {playlist.name} -> {target.name}", tag)
 
-        raw_provider_tracks = target.playlist_tracks(dest_playlist)
+        raw_provider_tracks = [_with_artist(t) for t in target.playlist_tracks(dest_playlist)]
         source_tracks = [_as_source_track(t) for t in playlist.tracks]
         expected = _expected_ids(playlist.tracks, provider_id)
         to_add, to_remove = compute_diff(source_tracks, raw_provider_tracks, expected, target.track_id)
