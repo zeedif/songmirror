@@ -324,8 +324,9 @@ def library_playlists():
             if data.get("__typename") != "Playlist":
                 continue
             uri = data.get("uri") or item.get("_uri") or ""
-            if not str(uri).startswith("spotify:playlist:") or not data.get("name"):
-                raise RuntimeError("Spotify library read incomplete: playlist metadata was missing")
+            if not str(uri).startswith("spotify:playlist:"):
+                log_warn("skipping library row with no resolvable playlist id", tag="spotify")
+                continue
             owner = (data.get("ownerV2") or {}).get("data") or {}
             editable = bool((data.get("currentUserCapabilities") or {}).get("canEditItems"))
             out.append({
