@@ -4,16 +4,53 @@ import { LuTrash2 } from 'react-icons/lu'
 import { api, errorMessage } from '@/api'
 import { useProviderPlaylists } from '@/hooks/useProviderPlaylists'
 import { serviceLogoId, tagText } from '@/lib/constants'
-import type { Account, LocalPlaylist, LocalPlaylistCompareResult, LocalPlaylistPushJob } from '@/types'
+import { formatDuration } from '@/lib/format'
+import type { Account, LocalPlaylistCompareResult, LocalPlaylistDiffTrack, LocalPlaylist, LocalPlaylistPushJob } from '@/types'
 
 import { Button } from '../ui/Button'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
+import { CoverArt } from '../ui/CoverArt'
 import { Modal } from '../ui/Modal'
 import { PlaylistPickerField } from '../ui/PlaylistPickerField'
 import { SelectField } from '../ui/SelectField'
 import { ServiceLogo } from '../ui/ServiceLogo'
 import { TextField } from '../ui/TextField'
 import { Toggle } from '../ui/Toggle'
+
+/** One row in a diff list (`Push will add` / `Only on <service>`) — same
+ * image + name/artist template as the provider PlaylistDetailModal's track
+ * rows, so a track looks like the same track everywhere in the app. */
+function DiffTrackRow({
+  track,
+  checkbox,
+}: {
+  track: LocalPlaylistDiffTrack
+  checkbox?: { checked: boolean; onToggle: () => void }
+}) {
+  return (
+    <li className="flex items-center gap-2.5 rounded-control px-2 py-1.5 hover:bg-surface-2">
+      {checkbox && (
+        <input
+          type="checkbox"
+          checked={checkbox.checked}
+          onChange={checkbox.onToggle}
+          aria-label={`Select ${track.name}`}
+          className="size-4 shrink-0 accent-accent"
+        />
+      )}
+      <CoverArt image={track.image} className="size-10" />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13px] font-semibold text-text">{track.name}</span>
+        <span className="block truncate text-xs text-text-3">
+          {[track.artist, track.album].filter(Boolean).join(' · ') || 'Unknown artist'}
+        </span>
+      </span>
+      <span className="hidden shrink-0 font-mono text-[11px] text-text-3 sm:block">
+        {formatDuration(track.duration_ms ? track.duration_ms / 1000 : null) ?? '—'}
+      </span>
+    </li>
+  )
+}
 
 interface Props {
   playlistId: string | null
@@ -197,6 +234,7 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
   }
 
   const boundLiveId = playlist?.links[provider] ?? ''
+  const providerName = connected.find((a) => a.id === provider)?.name ?? 'this service'
 
   return (
     <>
@@ -204,7 +242,7 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
         open={playlistId !== null}
         onClose={onClose}
         title={playlist?.name ?? 'Playlist'}
-        widthClassName="max-w-2xl"
+        widthClassName="max-w-3xl"
         footer={
           <>
             <Button
@@ -253,6 +291,7 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
                         onChange={() => toggleTrack(track.id)}
                         className="size-4 shrink-0 accent-accent"
                       />
+                      <CoverArt image={track.image} className="size-9" />
                       <span className="min-w-0 flex-1 truncate text-[13px] text-text">
                         {track.name}
                         {track.artist ? <span className="text-text-3"> — {track.artist}</span> : null}
@@ -321,53 +360,49 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
                       </div>
 
                       {compareResult && (
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="flex flex-col gap-4">
                           <div className="flex flex-col gap-1.5">
                             <p className="font-mono text-[10.5px] font-semibold uppercase tracking-wide text-text-3">
                               Push will add ({compareResult.to_push_add.length})
                             </p>
-                            <ul className="thin-scrollbar flex max-h-40 flex-col gap-0.5 overflow-y-auto rounded-control border border-border p-1.5">
-                              {compareResult.to_push_add.length === 0 ? (
-                                <li className="px-2 py-2 text-xs text-text-3">Nothing to add.</li>
-                              ) : (
-                                compareResult.to_push_add.map((t) => (
-                                  <li key={t.id} className="truncate px-2 py-1 text-[12px] text-text">
-                                    {t.name} <span className="text-text-3">— {t.artist}</span>
-                                  </li>
-                                ))
-                              )}
-                            </ul>
+                            {compareResult.to_push_add.length === 0 ? (
+                              <p className="rounded-control border border-dashed border-border-strong px-3 py-3 text-center text-xs text-text-3">
+                                Nothing to add — {providerName} already has everything from this playlist.
+                              </p>
+                            ) : (
+                              <ul className="thin-scrollbar flex max-h-72 flex-col gap-0.5 overflow-y-auto rounded-card border border-border bg-inset p-1.5">
+                                {compareResult.to_push_add.map((t) => (
+                                  <DiffTrackRow key={t.id} track={t} />
+                                ))}
+                              </ul>
+                            )}
                           </div>
                           <div className="flex flex-col gap-1.5">
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between gap-2">
                               <p className="font-mono text-[10.5px] font-semibold uppercase tracking-wide text-text-3">
-                                Only on this service ({compareResult.provider_only.length})
+                                Only on {providerName} ({compareResult.provider_only.length})
                               </p>
                               {selectedPullIds.size > 0 && (
                                 <Button variant="secondary" size="sm" loading={pulling} onClick={() => void handlePull()}>
-                                  Pull {selectedPullIds.size}
+                                  Pull {selectedPullIds.size} into this playlist
                                 </Button>
                               )}
                             </div>
-                            <ul className="thin-scrollbar flex max-h-40 flex-col gap-0.5 overflow-y-auto rounded-control border border-border p-1.5">
-                              {compareResult.provider_only.length === 0 ? (
-                                <li className="px-2 py-2 text-xs text-text-3">Nothing extra.</li>
-                              ) : (
-                                compareResult.provider_only.map((t) => (
-                                  <li key={t.id} className="flex items-center gap-2 px-2 py-1">
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedPullIds.has(t.id)}
-                                      onChange={() => togglePull(t.id)}
-                                      className="size-3.5 shrink-0 accent-accent"
-                                    />
-                                    <span className="min-w-0 flex-1 truncate text-[12px] text-text">
-                                      {t.name} <span className="text-text-3">— {t.artist}</span>
-                                    </span>
-                                  </li>
-                                ))
-                              )}
-                            </ul>
+                            {compareResult.provider_only.length === 0 ? (
+                              <p className="rounded-control border border-dashed border-border-strong px-3 py-3 text-center text-xs text-text-3">
+                                Nothing extra on {providerName} — this playlist already has everything from there.
+                              </p>
+                            ) : (
+                              <ul className="thin-scrollbar flex max-h-72 flex-col gap-0.5 overflow-y-auto rounded-card border border-border bg-inset p-1.5">
+                                {compareResult.provider_only.map((t) => (
+                                  <DiffTrackRow
+                                    key={t.id}
+                                    track={t}
+                                    checkbox={{ checked: selectedPullIds.has(t.id), onToggle: () => togglePull(t.id) }}
+                                  />
+                                ))}
+                              </ul>
+                            )}
                           </div>
                         </div>
                       )}
@@ -376,9 +411,14 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
                         <Toggle
                           checked={allowRemovals}
                           onChange={setAllowRemovals}
-                          label="Mirror removals"
-                          description="Also remove tracks from this service that aren't in the local playlist."
+                          label={`Delete extras on ${providerName}`}
+                          description={`When pushing, also delete the tracks on ${providerName} that aren't in this local playlist (shown above as "Only on ${providerName}"). Off by default — a push only ever adds unless you turn this on.`}
                         />
+                        {compareResult && compareResult.provider_only.length === 0 && (
+                          <p className="text-xs text-text-3">
+                            Nothing on {providerName} would be deleted right now — there's nothing extra there. Pulling a track above also takes it out of this list.
+                          </p>
+                        )}
                         {allowRemovals && (
                           <TextField
                             label="Removal cap"

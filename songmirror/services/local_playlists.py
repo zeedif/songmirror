@@ -77,6 +77,7 @@ def _as_source_track(local_track):
         "isrc": local_track.get("isrc") or "",
         "duration_ms": local_track.get("duration_ms"),
         "added_at": local_track.get("added_at") or "",
+        "image": local_track.get("image") or "",
     }
 
 
@@ -111,6 +112,7 @@ def _diff_track_summary(track, *, track_id):
         "album": track.get("album") or "",
         "duration_ms": track.get("duration_ms"),
         "added_at": track.get("added_at") or "",
+        "image": track.get("image") or "",
     }
 
 

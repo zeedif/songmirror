@@ -381,6 +381,7 @@ export interface LocalPlaylistDiffTrack {
   album: string
   duration_ms: number | null
   added_at: string
+  image: string
 }
 
 /** GET /api/local-playlists/{id}/compare/{provider} — read-only diff between
