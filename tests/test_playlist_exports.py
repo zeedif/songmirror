@@ -11,13 +11,11 @@ def _detail():
         "id": "playlist-1",
         "name": "Beyoncé & Friends",
         "description": "A <carefully> kept mix",
-        "count": 1,
         "image": "https://img.test/playlist.jpg",
         "owned": True,
         "editable": True,
         "external_url": "https://music.apple.com/library/playlist/playlist-1",
         "tracks": [{
-            "position": 0,
             "id": "track-1",
             "isrc": "USAAA2600001",
             "occurrence_id": "entry-1",
@@ -52,8 +50,8 @@ def test_lossless_json_export_is_versioned_and_keeps_ordered_identity_metadata()
     assert body["schema_version"] == 1
     assert body["exported_at"] == "2026-08-28T18:00:00Z"
     assert body["provider"] == {"id": "apple", "name": "Apple Music"}
-    assert body["playlist_count"] == 1
-    assert body["track_count"] == 1
+    assert len(body["playlists"]) == 1
+    assert len(body["playlists"][0]["tracks"]) == 1
     assert body["playlists"][0]["tracks"][0]["occurrence_id"] == "entry-1"
     assert body["playlists"][0]["tracks"][0]["isrc"] == "USAAA2600001"
     assert body["playlists"][0]["tracks"][0]["album_position"] == 7
@@ -185,9 +183,7 @@ def test_provider_export_uses_one_target_and_snapshots_every_playlist_fresh(
 
     assert calls == ["browse", "tracks:2", "tracks:1"]
     assert [playlist["name"] for playlist in body["playlists"]] == ["Alpha", "Zulu"]
-    assert [
-        playlist["tracks"][0]["position"] for playlist in body["playlists"]
-    ] == [0, 0]
+    assert [playlist["tracks"][0]["name"] for playlist in body["playlists"]] == ["Alpha", "Zulu"]
 
 
 def test_export_keeps_idless_catalog_ghosts_with_last_visible_metadata(
@@ -238,9 +234,8 @@ def test_export_keeps_idless_catalog_ghosts_with_last_visible_metadata(
     body = json.loads(result.content)
     track = body["playlists"][0]["tracks"][0]
 
-    assert body["track_count"] == 1
+    assert len(body["playlists"][0]["tracks"]) == 1
     assert track == {
-        "position": 0,
         "id": "",
         "isrc": "",
         "occurrence_id": "library-entry-9",
