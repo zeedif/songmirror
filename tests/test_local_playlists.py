@@ -88,7 +88,9 @@ def test_clone_from_provider_maps_tracks_and_binds_link(tmp_path, monkeypatch):
     assert len(playlist.tracks) == 1  # the unavailable ghost track was skipped
     track = playlist.tracks[0]
     assert track["name"] == "Song" and track["isrc"] == "ISRC1"
-    assert track["links"] == {"spotify": {"id": "t1", "occurrence_id": "occ1"}}
+    assert track["links"] == {
+        "spotify": {"id": "t1", "occurrence_id": "occ1", "external_url": "", "image": ""}
+    }
 
 
 def _backup(playlists):
@@ -96,8 +98,6 @@ def _backup(playlists):
         "kind": BACKUP_KIND, "schema_version": SCHEMA_VERSION,
         "exported_at": "2026-01-01T00:00:00Z",
         "provider": {"id": "spotify", "name": "Spotify"},
-        "playlist_count": len(playlists),
-        "track_count": sum(len(p["tracks"]) for p in playlists),
         "playlists": playlists,
     }
 
@@ -132,7 +132,10 @@ def test_import_backup_maps_tracks_without_binding_a_live_target(tmp_path):
     assert playlist.name == "Español"
     assert playlist.links == {}  # never auto-bound to a live playlist
     track = playlist.tracks[0]
-    assert track["links"] == {"spotify": {"id": "t1", "occurrence_id": ""}}  # catalog id kept, occurrence dropped
+    # catalog id kept, occurrence dropped
+    assert track["links"] == {
+        "spotify": {"id": "t1", "occurrence_id": "", "external_url": "", "image": ""}
+    }
 
 
 def test_import_backup_select_ids_filters_playlists(tmp_path):
@@ -270,7 +273,9 @@ def test_pull_merges_selected_provider_tracks(tmp_path):
     playlist = svc.pull(playlist.id, "apple", ["p1"])
     assert len(playlist.tracks) == 1
     assert playlist.tracks[0]["name"] == "Provider Track"
-    assert playlist.tracks[0]["links"] == {"apple": {"id": "p1", "occurrence_id": ""}}
+    assert playlist.tracks[0]["links"] == {
+        "apple": {"id": "p1", "occurrence_id": "", "external_url": "https://music.apple.com/song/p1", "image": ""}
+    }
 
 
 def test_pull_derives_artist_from_artists_list_when_singular_key_missing(tmp_path):

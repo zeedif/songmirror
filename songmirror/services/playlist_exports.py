@@ -19,19 +19,23 @@ BACKUP_KIND = "songmirror-playlist-backup"
 SCHEMA_VERSION = 1
 SUPPORTED_FORMATS = frozenset({"json", "xml", "soundiiz"})
 
+# A playlist's track count and a track's position are both fully derivable
+# from the tracks array itself (its length, its index) -- storing them
+# redundantly meant every reorder or single add/remove rewrote every
+# subsequent track's "position" and the playlist's "count", turning a
+# one-track change into a file-wide diff. Consumers compute these from the
+# array now (see LocalLibraryService.inspect_backup's len(tracks)).
 _PLAYLIST_FIELDS = (
     "provider",
     "id",
     "name",
     "description",
-    "count",
     "image",
     "owned",
     "editable",
     "external_url",
 )
 _TRACK_FIELDS = (
-    "position",
     "id",
     "isrc",
     "occurrence_id",
@@ -84,10 +88,6 @@ def build_backup(provider_id, provider_name, playlists, *, now=None):
         "schema_version": SCHEMA_VERSION,
         "exported_at": _utc_timestamp(now),
         "provider": {"id": str(provider_id), "name": str(provider_name)},
-        "playlist_count": len(normalized_playlists),
-        "track_count": sum(
-            len(playlist["tracks"]) for playlist in normalized_playlists
-        ),
         "playlists": normalized_playlists,
     }
 
@@ -111,8 +111,6 @@ def _as_xml(backup):
     provider = ElementTree.SubElement(root, "provider")
     _append_xml_value(provider, "id", backup["provider"]["id"])
     _append_xml_value(provider, "name", backup["provider"]["name"])
-    _append_xml_value(root, "playlist_count", backup["playlist_count"])
-    _append_xml_value(root, "track_count", backup["track_count"])
 
     playlists = ElementTree.SubElement(root, "playlists")
     for playlist_data in backup["playlists"]:
@@ -129,9 +127,9 @@ def _as_xml(backup):
     return ElementTree.tostring(root, encoding="utf-8", xml_declaration=True) + b"\n"
 
 
-_PLAYLIST_INT_FIELDS = frozenset({"count"})
+_PLAYLIST_INT_FIELDS = frozenset()
 _PLAYLIST_BOOL_FIELDS = frozenset({"owned", "editable"})
-_TRACK_INT_FIELDS = frozenset({"position", "album_position", "duration_ms"})
+_TRACK_INT_FIELDS = frozenset({"album_position", "duration_ms"})
 _TRACK_BOOL_FIELDS = frozenset({"unavailable"})
 
 
@@ -191,8 +189,6 @@ def parse_xml_backup(content):
             "id": _xml_text(provider_el.find("id")) if provider_el is not None else "",
             "name": _xml_text(provider_el.find("name")) if provider_el is not None else "",
         },
-        "playlist_count": _xml_int(root.find("playlist_count")),
-        "track_count": _xml_int(root.find("track_count")),
         "playlists": playlists,
     }
 

@@ -376,11 +376,23 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
                         {track.artist ? <span className="text-text-3"> — {track.artist}</span> : null}
                       </span>
                       <span className="flex shrink-0 items-center gap-1">
-                        {Object.keys(track.links).map((id) => {
+                        {Object.entries(track.links).map(([id, link]) => {
                           const logoId = serviceLogoId(id)
-                          return logoId ? (
-                            <ServiceLogo key={id} service={logoId} className={`size-3 ${tagText(id)}`} />
-                          ) : null
+                          if (!logoId) return null
+                          const icon = <ServiceLogo service={logoId} className={`size-3 ${tagText(id)}`} />
+                          return link.external_url ? (
+                            <a
+                              key={id}
+                              href={link.external_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              title={`Open on ${id}`}
+                            >
+                              {icon}
+                            </a>
+                          ) : (
+                            <span key={id}>{icon}</span>
+                          )
                         })}
                       </span>
                     </li>

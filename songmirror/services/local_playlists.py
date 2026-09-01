@@ -23,7 +23,7 @@ from ..engine.runner import load_cache, save_cache
 from ..engine.targets import build_one
 from ..engine.targets.base import TargetAuthError, TargetTransientError, _split_add_results
 from .playlist_exports import BACKUP_KIND, SCHEMA_VERSION, parse_xml_backup
-from .playlists import PlaylistService
+from .playlists import PlaylistService, _external_url
 from .settings import _open_private
 
 
@@ -46,12 +46,19 @@ def _new_id():
 def _local_track_from_row(row, *, provider_id=None, keep_occurrence=False):
     """Build a local track dict from a provider detail row or a backup track
     row — both share the same field names (services/playlists.py's
-    _normalize_tracks and playlist_exports.py's _TRACK_FIELDS)."""
+    _normalize_tracks and playlist_exports.py's _TRACK_FIELDS).
+
+    `links` is keyed by provider id so a track can carry a distinct
+    external_url/image per connected service at once (e.g. matched on both
+    Spotify and Tidal) instead of one flat pair that the last-synced service
+    overwrites."""
     links = {}
     if provider_id and row.get("id"):
         links[provider_id] = {
             "id": str(row["id"]),
             "occurrence_id": str(row.get("occurrence_id") or "") if keep_occurrence else "",
+            "external_url": str(row.get("external_url") or ""),
+            "image": str(row.get("image") or ""),
         }
     return {
         "id": _new_id(),
@@ -362,6 +369,7 @@ class LocalLibraryService:
                 "album": raw.get("album") or "", "isrc": raw.get("isrc") or "",
                 "duration_ms": raw.get("duration_ms"), "image": raw.get("image") or "",
                 "added_at": raw.get("added_at") or "", "occurrence_id": occurrence_of(raw),
+                "external_url": raw.get("external_url") or _external_url(provider_id, "track", tid),
             }
             playlist.tracks.append(_local_track_from_row(row, provider_id=provider_id, keep_occurrence=True))
         return self._store.upsert(playlist)
@@ -488,7 +496,15 @@ class LocalLibraryService:
             for local_id, tid in new_links.items():
                 for t in playlist.tracks:
                     if t["id"] == local_id:
-                        t.setdefault("links", {})[provider_id] = {"id": tid, "occurrence_id": ""}
+                        # target.resolve() only returns a catalog id, not the track's
+                        # image (that needs a further per-track API call this codepath
+                        # doesn't make) -- but every provider's track URL is a fixed
+                        # template from just the id, so external_url is free here.
+                        t.setdefault("links", {})[provider_id] = {
+                            "id": tid, "occurrence_id": "",
+                            "external_url": _external_url(provider_id, "track", tid),
+                            "image": "",
+                        }
             self._store.upsert(playlist)
 
         self._emit(

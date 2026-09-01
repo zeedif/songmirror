@@ -345,9 +345,12 @@ export interface LinkUpsertRequest {
   enabled: boolean
 }
 
-/** A track inside a local playlist. `links` carries known catalog ids per
- * connected service — filled in lazily as tracks get resolved/pushed so a
- * later push never has to re-search for the same track. */
+/** A track inside a local playlist. `links` carries known catalog ids (plus
+ * that service's own external_url/image) per connected service — filled in
+ * lazily as tracks get resolved/pushed so a later push never has to
+ * re-search for the same track, and a track matched on more than one
+ * service keeps a distinct entry for each instead of one flat pair the
+ * last-synced service would otherwise overwrite. */
 export interface LocalPlaylistTrack {
   id: string
   name: string
@@ -357,7 +360,7 @@ export interface LocalPlaylistTrack {
   duration_ms: number | null
   image: string
   added_at: string
-  links: Record<string, { id: string; occurrence_id: string }>
+  links: Record<string, { id: string; occurrence_id: string; external_url: string; image: string }>
 }
 
 /** GET/POST /api/local-playlists — a playlist that lives in SongMirror itself,
