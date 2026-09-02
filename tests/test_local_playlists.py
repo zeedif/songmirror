@@ -148,6 +148,74 @@ def test_import_backup_select_ids_filters_playlists(tmp_path):
     assert [p.name for p in imported] == ["Keep"]
 
 
+def test_export_backup_uses_the_local_kind_and_keeps_the_full_links_map(tmp_path, monkeypatch):
+    from songmirror.services.local_playlists import LOCAL_BACKUP_KIND, LOCAL_SCHEMA_VERSION
+
+    def fake_detail(self, provider_id, playlist_id, **kwargs):
+        return {
+            "provider": provider_id, "id": playlist_id, "name": "Multi", "description": "", "image": "",
+            "tracks": [{"id": "sp1", "isrc": "ISRC1", "name": "Song", "artist": "Artist",
+                        "external_url": "https://open.spotify.com/track/sp1", "image": "img"}],
+        }
+
+    monkeypatch.setattr(PlaylistService, "detail", fake_detail)
+    svc = _service(tmp_path)
+    playlist = svc.clone_from_provider("spotify", "pl1")
+    # A track matched on a second service too, as pull()/push() would leave it.
+    playlist.tracks[0]["links"]["tidal"] = {
+        "id": "td1", "occurrence_id": "", "external_url": "https://listen.tidal.com/track/td1", "image": "",
+    }
+    svc._store.upsert(playlist)
+
+    exported = svc.export_backup([playlist.id])
+
+    assert exported["kind"] == LOCAL_BACKUP_KIND
+    assert exported["schema_version"] == LOCAL_SCHEMA_VERSION
+    [entry] = exported["playlists"]
+    assert entry["name"] == "Multi"
+    [track] = entry["tracks"]
+    assert track["links"] == {
+        "spotify": {"id": "sp1", "occurrence_id": "", "external_url": "https://open.spotify.com/track/sp1", "image": "img"},
+        "tidal": {"id": "td1", "occurrence_id": "", "external_url": "https://listen.tidal.com/track/td1", "image": ""},
+    }
+
+
+def test_export_backup_only_includes_the_selected_ids(tmp_path):
+    svc = _service(tmp_path)
+    keep = svc.create("Keep")
+    svc.create("Skip")
+    exported = svc.export_backup([keep.id])
+    assert [p["name"] for p in exported["playlists"]] == ["Keep"]
+
+
+def test_import_backup_round_trips_a_local_kind_export(tmp_path):
+    svc = _service(tmp_path)
+    original = svc.create("Español")
+    original = svc.add_track(original.id, name="Song", artist="Artist", isrc="ISRC1")
+    original.tracks[0]["links"] = {
+        "spotify": {"id": "sp1", "occurrence_id": "", "external_url": "https://open.spotify.com/track/sp1", "image": ""},
+    }
+    svc._store.upsert(original)
+
+    exported = svc.export_backup([original.id])
+    [imported] = svc.import_backup(json.dumps(exported))
+
+    assert imported.id != original.id  # a fresh local identity, not the same record
+    assert imported.name == "Español"
+    assert len(imported.tracks) == 1
+    assert imported.tracks[0]["id"] != original.tracks[0]["id"]
+    assert imported.tracks[0]["isrc"] == "ISRC1"
+    assert imported.tracks[0]["links"] == original.tracks[0]["links"]
+
+
+def test_inspect_backup_rejects_wrong_local_schema_version(tmp_path):
+    from songmirror.services.local_playlists import LOCAL_BACKUP_KIND
+
+    svc = _service(tmp_path)
+    with pytest.raises(LocalLibraryError):
+        svc.inspect_backup(json.dumps({"kind": LOCAL_BACKUP_KIND, "schema_version": 999, "playlists": []}))
+
+
 def _xml_backup_text(playlists):
     """A genuine XML export, rendered through the app's own export path —
     the most faithful stand-in for a file a user actually downloaded."""

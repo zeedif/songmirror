@@ -13,12 +13,14 @@ interface Props {
   onSaved: () => void
 }
 
-/** Imports one or more playlists from a SongMirror backup file, JSON or XML
- * (see the Playlists page's Export menu). Only SongMirror's own lossless
- * formats are accepted — reading one back is how a playlist moves between
- * accounts or SongMirror instances. Never binds a live resync target on
- * import, since the backup's playlist id may belong to a different account
- * than what's connected here. */
+/** Imports one or more playlists from a SongMirror backup file: a live
+ * provider's own JSON/XML export (see the Playlists page's Export menu) or
+ * this Library's own richer JSON export (its Export button — keeps each
+ * track's full per-provider links map instead of one provider's flattened
+ * shape). Only SongMirror's own lossless formats are accepted — reading one
+ * back is how a playlist moves between accounts or SongMirror instances.
+ * Never binds a live resync target on import, since the backup's playlist
+ * id may belong to a different account than what's connected here. */
 export function ImportBackupModal({ open, onClose, onSaved }: Props) {
   const [content, setContent] = useState<string | null>(null)
   const [preview, setPreview] = useState<LocalPlaylistBackupPreview | null>(null)

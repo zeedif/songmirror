@@ -1,9 +1,11 @@
-"""Local playlist library — CRUD, clone/import, compare/pull, and push."""
+"""Local playlist library — CRUD, clone/import, compare/pull, push, export."""
 
+import json
+import re
 from dataclasses import asdict
 
-from fastapi import APIRouter, Body, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Body, HTTPException, Query, Request
+from fastapi.responses import JSONResponse, Response
 
 from ...services.local_playlists import LocalLibraryError
 
@@ -47,6 +49,30 @@ def inspect_local_playlist_backup(request: Request, body: dict = Body(...)):
 def import_local_playlist_backup(request: Request, body: dict = Body(...)):
     imported = _handled(_service(request).import_backup, body["content"], body.get("select_ids"))
     return [asdict(p) for p in imported]
+
+
+@router.get("/api/local-playlists/export")
+def export_local_playlists(request: Request, ids: str = Query(...)):
+    """Download an explicit selection of local-library playlists as one
+    file, in the library's own richer format (each track's full
+    per-provider links map, not one provider's flattened shape)."""
+    playlist_ids = [i for i in ids.split(",") if i]
+    if not playlist_ids:
+        raise HTTPException(status_code=400, detail="No playlists selected.")
+    backup = _handled(_service(request).export_backup, playlist_ids)
+    content = (json.dumps(backup, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    timestamp = re.sub(r"[-:]", "", backup["exported_at"])
+    count = len(backup["playlists"])
+    filename = f"songmirror-library-{count}-playlist{'s' if count != 1 else ''}-{timestamp}.json"
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get("/api/local-playlists/push-jobs/{job_id}")

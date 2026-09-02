@@ -27,6 +27,17 @@ from .playlists import PlaylistService, _external_url
 from .settings import _open_private
 
 
+# A distinct backup kind for exports of the local library itself, alongside
+# BACKUP_KIND ("songmirror-playlist-backup", one live provider's own
+# snapshot). This one carries each track's full per-provider links map
+# (id/occurrence_id/external_url/image for every service it's matched on at
+# once) instead of one flat external_url/image pair -- strictly more
+# information than the provider format can hold, so it gets its own kind
+# rather than being shoehorned through playlist_exports.py's allowlists.
+LOCAL_BACKUP_KIND = "songmirror-local-library-backup"
+LOCAL_SCHEMA_VERSION = 1
+
+
 class LocalLibraryError(RuntimeError):
     status_code = 502
 
@@ -247,9 +258,11 @@ class LocalLibraryService:
 
     @staticmethod
     def _parse_backup(content):
-        """Accept either of SongMirror's own lossless backup encodings (see
-        services/playlist_exports.py) — JSON or XML — and return the same
-        normalized dict shape either way. `content` is the raw file text."""
+        """Accept any of SongMirror's own lossless backup encodings: a live
+        provider's own JSON/XML export (services/playlist_exports.py) or a
+        JSON export of the local library itself (LOCAL_BACKUP_KIND, see
+        export_backup below) — and return the same normalized dict shape
+        either way. `content` is the raw file text."""
         try:
             data = json.loads(content)
         except json.JSONDecodeError:
@@ -259,14 +272,31 @@ class LocalLibraryService:
                 raise LocalLibraryError(
                     "That file isn't a SongMirror playlist backup (unrecognized format)."
                 ) from exc
-        if not isinstance(data, dict) or data.get("kind") != BACKUP_KIND:
+        kind = isinstance(data, dict) and data.get("kind")
+        if kind not in (BACKUP_KIND, LOCAL_BACKUP_KIND):
             raise LocalLibraryError("That file isn't a SongMirror playlist backup.")
-        if data.get("schema_version") != SCHEMA_VERSION:
+        expected_version = LOCAL_SCHEMA_VERSION if kind == LOCAL_BACKUP_KIND else SCHEMA_VERSION
+        if data.get("schema_version") != expected_version:
             raise LocalLibraryError(
                 f"Unsupported backup schema version {data.get('schema_version')!r} — "
-                f"this SongMirror only reads version {SCHEMA_VERSION}."
+                f"this SongMirror only reads version {expected_version} for {kind!r} files."
             )
         return data
+
+    def export_backup(self, playlist_ids):
+        """Export playlists from the local library itself, in its own
+        richer format (LOCAL_BACKUP_KIND) — every track keeps its full
+        per-provider links map rather than being flattened to one provider's
+        shape. `playlist_ids` is required: this always exports an explicit
+        selection, never "everything" implicitly."""
+        wanted = set(playlist_ids)
+        playlists = [p for p in self.list() if p.id in wanted]
+        return {
+            "kind": LOCAL_BACKUP_KIND,
+            "schema_version": LOCAL_SCHEMA_VERSION,
+            "exported_at": _utc_now(),
+            "playlists": [asdict(p) for p in playlists],
+        }
 
     def inspect_backup(self, content):
         """Stateless preview of a backup file's playlists for the import picker."""
@@ -281,14 +311,43 @@ class LocalLibraryService:
         }
 
     def import_backup(self, content, select_ids=None):
-        """Import one or more playlists from a SongMirror backup (JSON or
-        XML). Never auto-binds a live resync target — the backup's playlist id
-        may belong to a different account/instance than whatever is connected
-        here."""
+        """Import one or more playlists from a SongMirror backup: a live
+        provider's own export (JSON or XML) or a local-library export (its
+        own richer JSON, LOCAL_BACKUP_KIND). Never auto-binds a live resync
+        target, and never copies playlist-level links either — the backup's
+        ids may belong to a different account/instance than whatever is
+        connected here."""
         data = self._parse_backup(content)
-        provider_id = (data.get("provider") or {}).get("id") or ""
         wanted = {str(i) for i in select_ids} if select_ids else None
         imported = []
+        if data.get("kind") == LOCAL_BACKUP_KIND:
+            for entry in data.get("playlists") or []:
+                if wanted is not None and str(entry.get("id") or "") not in wanted:
+                    continue
+                tracks = [
+                    {
+                        "id": _new_id(),
+                        "name": t.get("name") or "Unknown track",
+                        "artist": t.get("artist") or "",
+                        "album": t.get("album") or "",
+                        "isrc": t.get("isrc") or "",
+                        "duration_ms": t.get("duration_ms"),
+                        "image": t.get("image") or "",
+                        "added_at": t.get("added_at") or "",
+                        "links": t.get("links") or {},
+                    }
+                    for t in entry.get("tracks") or []
+                ]
+                playlist = LocalPlaylist(
+                    name=entry.get("name") or "Imported playlist",
+                    description=entry.get("description") or "",
+                    image=entry.get("image") or "",
+                    tracks=tracks,
+                )
+                imported.append(self._store.upsert(playlist))
+            return imported
+
+        provider_id = (data.get("provider") or {}).get("id") or ""
         for entry in data.get("playlists") or []:
             if wanted is not None and str(entry.get("id") or "") not in wanted:
                 continue

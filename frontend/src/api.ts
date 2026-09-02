@@ -237,6 +237,11 @@ export const api = {
     request<LocalPlaylistBackupPreview>('/api/local-playlists/import/inspect', json({ content })),
   importLocalPlaylistBackup: (content: string, selectIds?: string[]) =>
     request<LocalPlaylist[]>('/api/local-playlists/import', json({ content, select_ids: selectIds })),
+  exportLocalPlaylists: (ids: string[]) =>
+    download(
+      `/api/local-playlists/export?ids=${ids.map(encodeURIComponent).join(',')}`,
+      'songmirror-library.json',
+    ),
   addLocalPlaylistTrack: (
     id: string,
     values: { name: string; artist?: string; album?: string; isrc?: string; duration_ms?: number | null },

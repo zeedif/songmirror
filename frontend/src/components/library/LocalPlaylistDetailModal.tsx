@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { LuTrash2 } from 'react-icons/lu'
+import { LuDownload, LuTrash2 } from 'react-icons/lu'
 
 import { api, errorMessage } from '@/api'
 import { useProviderPlaylists } from '@/hooks/useProviderPlaylists'
@@ -86,6 +86,7 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
   const [pushing, setPushing] = useState(false)
   const [pushJob, setPushJob] = useState<LocalPlaylistPushJob | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const connected = useMemo(() => accounts.filter((a) => a.state === 'connected' && a.transferable), [accounts])
   const { entries } = useProviderPlaylists(provider ? [provider] : [])
@@ -269,6 +270,18 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
     }
   }
 
+  async function handleExport() {
+    if (!playlist) return
+    setExporting(true)
+    try {
+      await api.exportLocalPlaylists([playlist.id])
+    } catch (err) {
+      setError(errorMessage(err))
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const boundLiveId = playlist?.links[provider] ?? ''
   const providerName = connected.find((a) => a.id === provider)?.name ?? 'this service'
   const nothingToRemove = compareResult !== null && compareResult.provider_only.length === 0
@@ -295,6 +308,15 @@ export function LocalPlaylistDetailModal({ playlistId, accounts, onClose, onChan
               disabled={!playlist}
             >
               Delete
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              icon={<LuDownload className="size-4" aria-hidden="true" />}
+              onClick={() => void handleExport()}
+              disabled={!playlist || exporting}
+            >
+              Export
             </Button>
             <Button type="button" variant="secondary" onClick={onClose}>
               Close

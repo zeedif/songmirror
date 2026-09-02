@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { LuArrowDownUp, LuTrash2 } from 'react-icons/lu'
+import { LuArrowDownUp, LuDownload, LuTrash2 } from 'react-icons/lu'
 
 import { api, errorMessage } from '@/api'
 import { CloneFromProviderModal } from '@/components/library/CloneFromProviderModal'
@@ -35,6 +35,8 @@ export default function Library() {
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [bulkDeleting, setBulkDeleting] = useState(false)
   const [bulkError, setBulkError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
   const [sortOrder, setSortOrder] = useState<SortOrder>('name-asc')
 
   const sortedPlaylists = useMemo(() => {
@@ -63,6 +65,19 @@ export default function Library() {
       else next.add(id)
       return next
     })
+  }
+
+  async function handleExportSelected() {
+    if (selectedIds.size === 0) return
+    setExporting(true)
+    setExportError(null)
+    try {
+      await api.exportLocalPlaylists([...selectedIds])
+    } catch (err) {
+      setExportError(errorMessage(err))
+    } finally {
+      setExporting(false)
+    }
   }
 
   async function handleBulkDelete() {
@@ -104,6 +119,9 @@ export default function Library() {
       {bulkError && (
         <p className="rounded-control bg-danger-soft px-3 py-2 text-sm text-danger">Could not delete: {bulkError}</p>
       )}
+      {exportError && (
+        <p className="rounded-control bg-danger-soft px-3 py-2 text-sm text-danger">Could not export: {exportError}</p>
+      )}
 
       {loading && !playlists ? (
         <LoadingStatus label="Loading your library…">
@@ -136,14 +154,25 @@ export default function Library() {
               />
             </div>
             {selectedIds.size > 0 && (
-              <Button
-                variant="danger-ghost"
-                size="sm"
-                icon={<LuTrash2 className="size-3.5" aria-hidden="true" />}
-                onClick={() => setBulkDeleteConfirm(true)}
-              >
-                Delete {selectedIds.size} selected
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<LuDownload className="size-3.5" aria-hidden="true" />}
+                  onClick={() => void handleExportSelected()}
+                  disabled={exporting}
+                >
+                  Export {selectedIds.size} selected
+                </Button>
+                <Button
+                  variant="danger-ghost"
+                  size="sm"
+                  icon={<LuTrash2 className="size-3.5" aria-hidden="true" />}
+                  onClick={() => setBulkDeleteConfirm(true)}
+                >
+                  Delete {selectedIds.size} selected
+                </Button>
+              </div>
             )}
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
